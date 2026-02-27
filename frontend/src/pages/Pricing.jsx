@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { Check, FileText, ChevronRight, Zap, Shield, Clock, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { api, useAuth } from '../App';
+import { useAuth } from '../App';
+import { getSubscriptionPlans } from '../lib/api';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
@@ -27,8 +28,8 @@ const Pricing = () => {
 
   const fetchPlans = async () => {
     try {
-      const response = await api.get('/subscription/plans');
-      setPlans(response.data);
+      const data = getSubscriptionPlans();
+      setPlans(data);
     } catch (error) {
       toast.error('Failed to load plans');
     } finally {
@@ -45,16 +46,7 @@ const Pricing = () => {
     setProcessingPlan(planId);
 
     try {
-      const response = await api.post('/subscription/checkout', {
-        plan: planId,
-        origin_url: window.location.origin
-      });
-
-      // Redirect to Stripe
-      window.location.href = response.data.url;
-    } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to start checkout';
-      toast.error(message);
+      toast.info('Stripe checkout integration requires an edge function.');
     } finally {
       setProcessingPlan(null);
     }

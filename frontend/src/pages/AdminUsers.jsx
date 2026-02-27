@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { api } from '../App';
+import { getAdminUsers, adminUpdateUser, adminDeleteUser } from '../lib/api';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -42,8 +42,8 @@ const AdminUsers = () => {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const response = await api.get('/admin/users');
-      setUsers(response.data);
+      const data = await getAdminUsers();
+      setUsers(data);
     } catch (error) {
       toast.error('Failed to load users');
     } finally {
@@ -57,7 +57,7 @@ const AdminUsers = () => {
 
   const handleUpdateUser = async (userId, updates) => {
     try {
-      await api.put(`/admin/users/${userId}`, updates);
+      await adminUpdateUser(userId, updates);
       toast.success('User updated successfully');
       fetchUsers();
     } catch (error) {
@@ -68,11 +68,11 @@ const AdminUsers = () => {
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/admin/users/${deleteTarget.user_id}`);
+      await adminDeleteUser(deleteTarget.user_id);
       toast.success('User deleted successfully');
       setUsers(users.filter(u => u.user_id !== deleteTarget.user_id));
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to delete user');
+      toast.error(error.message || 'Failed to delete user');
     } finally {
       setDeleteTarget(null);
     }

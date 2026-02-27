@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, FileText, Link2, HardDrive, TrendingUp, Activity } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { api } from '../App';
+import { getAdminStats } from '../lib/api';
 import { toast } from 'sonner';
 
 const AdminDashboard = () => {
@@ -16,8 +16,8 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/admin/stats');
-      setStats(response.data);
+      const data = await getAdminStats();
+      setStats(data);
     } catch (error) {
       toast.error('Failed to load admin stats');
     } finally {

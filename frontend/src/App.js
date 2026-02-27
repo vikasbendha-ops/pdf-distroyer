@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
-import { toast } from 'sonner';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { supabase } from './lib/supabase';
+import { getProfile, updateLanguage } from './lib/api';
 
-// Pages
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -21,118 +20,89 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminSettings from './pages/AdminSettings';
 import AdminUsers from './pages/AdminUsers';
 import AdminLinks from './pages/AdminLinks';
-import AuthCallback from './pages/AuthCallback';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-// Auth Context
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
 
-// API instance
-export const api = axios.create({
-  baseURL: API,
-  withCredentials: true,
-});
-
-// Add auth header to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Auth Provider
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const checkAuth = useCallback(async () => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    if (window.location.hash?.includes('session_id=')) {
-      setLoading(false);
-      return;
-    }
-
+  const loadProfile = useCallback(async () => {
     try {
-      const response = await api.get('/auth/me');
-      setUser(response.data);
-      // Set language from user preference
-      if (response.data?.language) {
-        localStorage.setItem('preferredLanguage', response.data.language);
+      const profile = await getProfile();
+      setUser(profile);
+      if (profile?.language) {
+        localStorage.setItem('preferredLanguage', profile.language);
       }
-    } catch (error) {
+    } catch {
       setUser(null);
-      localStorage.removeItem('token');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadProfile().finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        loadProfile();
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadProfile]);
 
   const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem('token', access_token);
-    if (userData?.language) {
-      localStorage.setItem('preferredLanguage', userData.language);
-    }
-    setUser(userData);
-    return userData;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const profile = await getProfile();
+    setUser(profile);
+    if (profile?.language) localStorage.setItem('preferredLanguage', profile.language);
+    return profile;
   };
 
   const register = async (name, email, password, language = 'en') => {
-    const response = await api.post('/auth/register', { name, email, password, language });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem('token', access_token);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name, language } }
+    });
+    if (error) throw error;
+    const profile = await getProfile();
+    setUser(profile);
     localStorage.setItem('preferredLanguage', language);
-    setUser(userData);
-    return userData;
+    return profile;
   };
 
   const logout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-    localStorage.removeItem('token');
+    await supabase.auth.signOut();
     setUser(null);
   };
 
   const refreshUser = async () => {
     try {
-      const response = await api.get('/auth/me');
-      setUser(response.data);
-    } catch (error) {
-      console.error('Refresh user error:', error);
-    }
+      const profile = await getProfile();
+      setUser(profile);
+    } catch {}
   };
 
   const updateUserLanguage = async (language) => {
-    try {
-      await api.put('/auth/language', { language });
-      setUser(prev => ({ ...prev, language }));
-      localStorage.setItem('preferredLanguage', language);
-    } catch (error) {
-      console.error('Update language error:', error);
-      throw error;
-    }
+    await updateLanguage(language);
+    setUser(prev => ({ ...prev, language }));
+    localStorage.setItem('preferredLanguage', language);
   };
 
   return (
@@ -142,7 +112,6 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Protected Route
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -155,50 +124,33 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />;
 
   return children;
 };
 
-// App Router
 function AppRouter() {
-  const location = useLocation();
-
-  // Check URL fragment for session_id (OAuth callback)
-  if (location.hash?.includes('session_id=')) {
-    return <AuthCallback />;
-  }
-
   return (
     <Routes>
-      {/* Public Routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/view/:token" element={<SecureViewer />} />
       <Route path="/expired" element={<ExpiredPage />} />
-      
-      {/* Protected User Routes */}
+
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/pdfs" element={<ProtectedRoute><PDFManagement /></ProtectedRoute>} />
       <Route path="/links" element={<ProtectedRoute><MyLinks /></ProtectedRoute>} />
       <Route path="/links/create" element={<ProtectedRoute><LinkGenerator /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-      
-      {/* Admin Routes */}
+
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
       <Route path="/admin/links" element={<ProtectedRoute adminOnly><AdminLinks /></ProtectedRoute>} />
       <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
-      
-      {/* Catch all */}
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -221,4 +173,3 @@ function App() {
 }
 
 export default App;
-export { API, BACKEND_URL };

@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
-import { api } from '../App';
+import * as apiService from '../lib/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -41,14 +41,14 @@ const MyLinks = () => {
   const fetchData = useCallback(async () => {
     try {
       const [linksRes, pdfsRes] = await Promise.all([
-        api.get('/links'),
-        api.get('/pdfs')
+        apiService.getLinks(),
+        apiService.getPdfs()
       ]);
-      setLinks(linksRes.data);
-      
+      setLinks(linksRes);
+
       // Create PDF lookup
       const pdfLookup = {};
-      pdfsRes.data.forEach(pdf => {
+      pdfsRes.forEach(pdf => {
         pdfLookup[pdf.pdf_id] = pdf;
       });
       setPdfs(pdfLookup);
@@ -66,7 +66,7 @@ const MyLinks = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/links/${deleteTarget.link_id}`);
+      await apiService.deleteLink(deleteTarget.link_id);
       toast.success('Link deleted successfully');
       setLinks(links.filter(l => l.link_id !== deleteTarget.link_id));
     } catch (error) {
@@ -79,7 +79,7 @@ const MyLinks = () => {
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     try {
-      await api.post(`/links/${revokeTarget.link_id}/revoke`);
+      await apiService.revokeLink(revokeTarget.link_id);
       toast.success('Link revoked successfully');
       setLinks(links.map(l => 
         l.link_id === revokeTarget.link_id ? { ...l, status: 'revoked' } : l

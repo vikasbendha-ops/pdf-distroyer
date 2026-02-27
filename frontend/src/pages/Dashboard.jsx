@@ -6,7 +6,8 @@ import DashboardLayout from '../components/DashboardLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Progress } from '../components/ui/progress';
-import { api, useAuth } from '../App';
+import { useAuth } from '../App';
+import { getDashboardStats, getLinks } from '../lib/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'sonner';
 
@@ -32,12 +33,8 @@ const Dashboard = () => {
 
   const checkPaymentStatus = async (sessionId) => {
     try {
-      const response = await api.get(`/subscription/status/${sessionId}`);
-      if (response.data.payment_status === 'paid') {
-        toast.success('Subscription activated successfully!');
-        await refreshUser();
-        fetchData();
-      }
+      await refreshUser();
+      fetchData();
     } catch (error) {
       console.error('Payment status check failed:', error);
     }
@@ -45,12 +42,12 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [statsRes, linksRes] = await Promise.all([
-        api.get('/dashboard/stats'),
-        api.get('/links')
+      const [dashStats, linksData] = await Promise.all([
+        getDashboardStats(),
+        getLinks()
       ]);
-      setStats(statsRes.data);
-      setRecentLinks(linksRes.data.slice(0, 5));
+      setStats(dashStats);
+      setRecentLinks(linksData.slice(0, 5));
     } catch (error) {
       toast.error('Failed to load dashboard data');
     } finally {

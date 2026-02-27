@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Calendar as CalendarPicker } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { api, useAuth, BACKEND_URL } from '../App';
+import { useAuth } from '../App';
+import { getPdfs, createLink } from '../lib/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -53,12 +54,12 @@ const LinkGenerator = () => {
 
   const fetchPdfs = async () => {
     try {
-      const response = await api.get('/pdfs');
-      setPdfs(response.data);
-      
+      const data = await getPdfs();
+      setPdfs(data);
+
       // Auto-select first PDF if no query param
-      if (response.data.length > 0 && !searchParams.get('pdf')) {
-        setSelectedPdf(response.data[0].pdf_id);
+      if (data.length > 0 && !searchParams.get('pdf')) {
+        setSelectedPdf(data[0].pdf_id);
       }
     } catch (error) {
       toast.error('Failed to load PDFs');
@@ -92,7 +93,7 @@ const LinkGenerator = () => {
         expiryFixedDatetime = dateWithTime.toISOString();
       }
 
-      const response = await api.post('/links', {
+      const linkData = await createLink({
         pdf_id: selectedPdf,
         expiry_mode: expiryMode,
         expiry_hours: expiryMode === 'countdown' ? hours : 0,
@@ -103,11 +104,11 @@ const LinkGenerator = () => {
         custom_expired_message: customExpiredMessage || null
       });
 
-      const fullUrl = `${window.location.origin}/view/${response.data.token}`;
-      setGeneratedLink({ ...response.data, full_url: fullUrl });
+      const fullUrl = `${window.location.origin}/view/${linkData.token}`;
+      setGeneratedLink({ ...linkData, full_url: fullUrl });
       toast.success('Secure link created successfully!');
     } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to create link';
+      const message = error.message || 'Failed to create link';
       toast.error(message);
     } finally {
       setCreating(false);

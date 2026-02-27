@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { api } from '../App';
+import { getAdminLinks, adminRevokeLink, adminDeleteLink } from '../lib/api';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -43,8 +43,8 @@ const AdminLinks = () => {
 
   const fetchLinks = useCallback(async () => {
     try {
-      const response = await api.get('/admin/links');
-      setLinks(response.data);
+      const data = await getAdminLinks();
+      setLinks(data);
     } catch (error) {
       toast.error('Failed to load links');
     } finally {
@@ -59,7 +59,7 @@ const AdminLinks = () => {
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     try {
-      await api.post(`/admin/links/${revokeTarget.link_id}/revoke`);
+      await adminRevokeLink(revokeTarget.link_id);
       toast.success('Link revoked successfully');
       setLinks(links.map(l => 
         l.link_id === revokeTarget.link_id ? { ...l, status: 'revoked' } : l
@@ -74,7 +74,7 @@ const AdminLinks = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/admin/links/${deleteTarget.link_id}`);
+      await adminDeleteLink(deleteTarget.link_id);
       toast.success('Link deleted successfully');
       setLinks(links.filter(l => l.link_id !== deleteTarget.link_id));
     } catch (error) {

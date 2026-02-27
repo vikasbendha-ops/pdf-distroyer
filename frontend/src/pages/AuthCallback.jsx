@@ -1,51 +1,36 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, useAuth } from '../App';
+import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
-    // Prevent double processing in StrictMode
     if (hasProcessed.current) return;
     hasProcessed.current = true;
 
     const processCallback = async () => {
-      // Extract session_id from URL hash
-      const hash = window.location.hash;
-      const sessionIdMatch = hash.match(/session_id=([^&]+)/);
-      
-      if (!sessionIdMatch) {
-        toast.error('Invalid authentication callback');
-        navigate('/login', { replace: true });
-        return;
-      }
-
-      const sessionId = sessionIdMatch[1];
-
       try {
-        // Exchange session_id for user data
-        const response = await api.post('/auth/google/session', { session_id: sessionId });
-        const userData = response.data.user;
-        
-        setUser(userData);
-        toast.success(`Welcome, ${userData.name}!`);
-        
-        // Clear the hash and navigate to dashboard
-        window.history.replaceState(null, '', window.location.pathname);
-        navigate('/dashboard', { replace: true, state: { user: userData } });
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (session) {
+          toast.success('Welcome!');
+          navigate('/dashboard', { replace: true });
+        } else {
+          toast.error('Authentication failed');
+          navigate('/login', { replace: true });
+        }
       } catch (error) {
-        console.error('Auth callback error:', error);
         toast.error('Authentication failed. Please try again.');
         navigate('/login', { replace: true });
       }
     };
 
     processCallback();
-  }, [navigate, setUser]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">

@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { api } from '../App';
+import { getStripeSettings, updateStripeSettings } from '../lib/api';
 import { toast } from 'sonner';
 
 const AdminSettings = () => {
@@ -21,8 +21,8 @@ const AdminSettings = () => {
 
   const fetchStripeConfig = async () => {
     try {
-      const res = await api.get('/admin/settings/stripe');
-      setStripeConfig(res.data);
+      const data = await getStripeSettings();
+      setStripeConfig(data);
     } catch (err) {
       toast.error('Failed to load Stripe settings');
     } finally {
@@ -41,12 +41,12 @@ const AdminSettings = () => {
     }
     setSaving(true);
     try {
-      await api.put('/admin/settings/stripe', { stripe_key: liveKey, mode: 'live' });
+      await updateStripeSettings({ stripe_key: liveKey, mode: 'live' });
       toast.success('Live Stripe key saved! Payments will now use live mode.');
       setLiveKey('');
       fetchStripeConfig();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save key');
+      toast.error(err.message || 'Failed to save key');
     } finally {
       setSaving(false);
     }
@@ -55,7 +55,7 @@ const AdminSettings = () => {
   const handleActivateSandbox = async () => {
     setSaving(true);
     try {
-      await api.put('/admin/settings/stripe', { mode: 'sandbox' });
+      await updateStripeSettings({ mode: 'sandbox' });
       toast.success('Switched back to Sandbox mode.');
       fetchStripeConfig();
     } catch (err) {

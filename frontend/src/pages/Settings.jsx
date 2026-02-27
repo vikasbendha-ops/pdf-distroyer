@@ -7,7 +7,9 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { api, useAuth } from '../App';
+import { useAuth } from '../App';
+import * as apiService from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -35,8 +37,8 @@ const Settings = () => {
 
   const fetchDomains = async () => {
     try {
-      const response = await api.get('/domains');
-      setDomains(response.data);
+      const data = await apiService.getDomains();
+      setDomains(data);
     } catch (error) {
       console.error('Failed to fetch domains');
     }
@@ -61,12 +63,12 @@ const Settings = () => {
 
     setAddingDomain(true);
     try {
-      const response = await api.post('/domains', { domain: newDomain });
+      const newDomainData = await apiService.addDomain(newDomain);
       toast.success('Domain added! Follow the verification instructions.');
-      setDomains([...domains, response.data]);
+      setDomains([...domains, newDomainData]);
       setNewDomain('');
     } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to add domain';
+      const message = error.message || 'Failed to add domain';
       toast.error(message);
     } finally {
       setAddingDomain(false);
@@ -75,7 +77,7 @@ const Settings = () => {
 
   const handleDeleteDomain = async (domainId) => {
     try {
-      await api.delete(`/domains/${domainId}`);
+      await apiService.deleteDomain(domainId);
       toast.success('Domain removed');
       setDomains(domains.filter(d => d.domain_id !== domainId));
     } catch (error) {
@@ -97,15 +99,18 @@ const Settings = () => {
     }
 
     setChangingPassword(true);
-    // Note: Password change would require current password verification
-    // For demo, we'll show a success message
-    setTimeout(() => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
       toast.success('Password changed successfully');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+    } catch (error) {
+      toast.error(error.message || 'Failed to change password');
+    } finally {
       setChangingPassword(false);
-    }, 1000);
+    }
   };
 
   return (

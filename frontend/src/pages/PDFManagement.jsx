@@ -36,7 +36,8 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
-import { api, useAuth, BACKEND_URL } from '../App';
+import { useAuth } from '../App';
+import * as api from '../lib/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -61,14 +62,10 @@ const PDFManagement = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [pdfsRes, foldersRes, linksRes] = await Promise.all([
-        api.get('/pdfs'),
-        api.get('/folders'),
-        api.get('/links')
-      ]);
-      setPdfs(pdfsRes.data);
-      setFolders(foldersRes.data);
-      setLinks(linksRes.data);
+      const [pdfsData, foldersData, linksData] = await Promise.all([api.getPdfs(), api.getFolders(), api.getLinks()]);
+      setPdfs(pdfsData);
+      setFolders(foldersData);
+      setLinks(linksData);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -95,17 +92,13 @@ const PDFManagement = () => {
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
 
     try {
-      await api.post('/pdfs/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.uploadPdf(file);
       toast.success('PDF uploaded successfully');
       fetchData();
     } catch (error) {
-      const message = error.response?.data?.detail || 'Upload failed';
+      const message = error.message || 'Upload failed';
       toast.error(message);
     } finally {
       setUploading(false);
@@ -117,7 +110,7 @@ const PDFManagement = () => {
     if (!deleteTarget) return;
 
     try {
-      await api.delete(`/pdfs/${deleteTarget.pdf_id}`);
+      await api.deletePdf(deleteTarget.pdf_id);
       toast.success('PDF deleted successfully');
       setPdfs(pdfs.filter(p => p.pdf_id !== deleteTarget.pdf_id));
     } catch (error) {
@@ -131,7 +124,7 @@ const PDFManagement = () => {
     if (!renameTarget || !newName.trim()) return;
 
     try {
-      await api.put(`/pdfs/${renameTarget.pdf_id}/rename`, { filename: newName });
+      await api.renamePdf(renameTarget.pdf_id, newName);
       toast.success('PDF renamed successfully');
       setPdfs(pdfs.map(p => 
         p.pdf_id === renameTarget.pdf_id ? { ...p, filename: newName } : p
@@ -148,8 +141,8 @@ const PDFManagement = () => {
     if (!newFolderName.trim()) return;
 
     try {
-      const response = await api.post('/folders', { name: newFolderName });
-      setFolders([...folders, response.data]);
+      const folder = await api.createFolder(newFolderName);
+      setFolders([...folders, folder]);
       toast.success('Folder created');
     } catch (error) {
       toast.error('Failed to create folder');
@@ -161,7 +154,7 @@ const PDFManagement = () => {
 
   const handleDeleteFolder = async (folderId) => {
     try {
-      await api.delete(`/folders/${folderId}`);
+      await api.deleteFolder(folderId);
       setFolders(folders.filter(f => f.folder_id !== folderId));
       if (currentFolder === folderId) {
         setCurrentFolder(null);
@@ -177,7 +170,7 @@ const PDFManagement = () => {
     if (!moveTarget) return;
 
     try {
-      await api.put(`/pdfs/${moveTarget.pdf_id}/move`, { folder: folderId });
+      await api.movePdf(moveTarget.pdf_id, folderId);
       toast.success('PDF moved');
       fetchData();
     } catch (error) {
